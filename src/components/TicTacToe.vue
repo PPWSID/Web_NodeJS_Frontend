@@ -1,141 +1,142 @@
 <template>
-    <div class="max-w-md mx-auto">
-      <!-- Game Stats -->
-      <div class="flex justify-between mb-4">
-        <div class="text-lg">
-          ชนะ: {{ stats.wins }} | แพ้: {{ stats.losses }} | เสมอ: {{ stats.draws }}
-        </div>
-        <button 
-          @click="resetStats"
-          class="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
-        >
-          รีเซ็ตสถิติ
-        </button>
-      </div>
-  
-      <!-- Game Board -->
-      <div class="grid grid-cols-3 gap-2 mb-4">
-        <BoardCell 
-          v-for="(cell, index) in board"
-          :key="index"
-          :value="cell"
-          :winning="winningCells.includes(index)"
-          :disabled="gameOver || cell !== ''"
-          @click="makeMove(index)"
-        />
-      </div>
-  
-      <!-- Game Status -->
-      <div v-if="gameOver" class="text-center mb-4">
-        <h2 class="text-xl font-bold mb-2">{{ gameOverMessage }}</h2>
-        <button 
-          @click="resetGame"
-          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          เริ่มเกมใหม่
-        </button>
-      </div>
-  
-      <!-- Loading State -->
-      <div v-if="isLoading" class="text-center">
-        <p>AI กำลังคิด...</p>
+  <div class="game-container">
+    <div class="game-title">
+      <h1>Tic Tac Toe</h1>
+    </div>
+    
+    <div class="game-stats">
+      <span>Win: {{ stats.win }}</span>
+      <span>Lose: {{ stats.lose }}</span>
+      <span>Draw: {{ stats.draw }}</span>
+      <button @click="resetGame">New Game</button>
+    </div>
+
+    <div class="game-result">
+      {{ resultMessage }}
+    </div>
+
+    <div class="game-board">
+      <div 
+        v-for="(cell, index) in board" 
+        :key="index"
+        class="cell"
+        @click="makeMove(index)"
+      >
+        {{ cell }}
       </div>
     </div>
-  </template>
+ 
+  </div>
+</template>
   
-  <script>
-  import { ref, reactive } from 'vue'
-  import BoardCell from './TicTacToeCell.vue'
-  import { checkWinner } from '../utils/TicTacToe'
-  import { makeAIMove } from '../services/TicTacToe'
-  
-  export default {
-    name: 'GameBoard',
-    components: {
-      BoardCell
+<script>
+import  {makeAIMove}  from '../services/TicTacToe';
+
+export default {
+  data() {
+    return {
+      board: Array(9).fill(''),
+      resultMessage: 'GAME ON!',
+      stats: {
+        win: 0,
+        lose: 0,
+        draw: 0
+      },
+      gameOver: false 
+    };
+  },
+  methods: {
+    makeMove(index) {
+      if (this.board[index] === '' && !this.gameOver) { 
+        this.board[index] = 'X';
+
+        const winner = this.checkGameStatus(); 
+
+        if (!winner) {
+          this.aiMove();
+        }
+      }
     },
-    setup() {
-      const board = ref(Array(9).fill(''))
-      const winningCells = ref([])
-      const gameOver = ref(false)
-      const gameOverMessage = ref('')
-      const isLoading = ref(false)
-      const stats = reactive({
-        wins: 0,
-        losses: 0,
-        draws: 0
-      })
-  
-      const makeMove = async (index) => {
-        if (board.value[index] === '' && !gameOver.value && !isLoading.value) {
-          // Player's move
-          board.value[index] = 'X'
-          
-          if (checkGameEnd()) return
-  
-          // AI's move
-          isLoading.value = true
-          try {
-            const aiMove = await makeAIMove([...board.value])
-            board.value[aiMove] = 'O'
-            checkGameEnd()
-          } catch (error) {
-            console.error('Error:', error)
-          } finally {
-            isLoading.value = false
-          }
+    async aiMove() {
+      if (this.gameOver) return; 
+
+      const aiIndex = await makeAIMove(this.board);
+      console.log(aiIndex);
+      
+      this.board[aiIndex] = 'O';
+      this.checkGameStatus();
+      
+    },
+    checkGameStatus() {
+      const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+      ];
+
+      for (let [a, b, c] of winPatterns) {
+        if (this.board[a] && this.board[a] === this.board[b] && this.board[a] === this.board[c]) {
+          this.gameOver = true;
+          this.resultMessage = this.board[a] === 'X' ? 'You Win!' : 'AI Wins!';
+          this.stats[this.board[a] === 'X' ? 'win' : 'lose']++;
+          return this.board[a]; 
         }
       }
-  
-      const checkGameEnd = () => {
-        const winner = checkWinner(board.value)
-        if (winner) {
-          gameOver.value = true
-          if (winner === 'X') {
-            gameOverMessage.value = 'คุณชนะ! 🎉'
-            stats.wins++
-          } else {
-            gameOverMessage.value = 'AI ชนะ! 🤖'
-            stats.losses++
-          }
-          winningCells.value = findWinningCells(board.value)
-          return true
-        }
-        
-        if (board.value.every(cell => cell !== '')) {
-          gameOver.value = true
-          gameOverMessage.value = 'เสมอ! 🤝'
-          stats.draws++
-          return true
-        }
-        
-        return false
+
+      if (this.board.every(cell => cell !== '')) {
+        this.gameOver = true;
+        this.resultMessage = 'Draw!';
+        this.stats.draw++;
+        return 'draw'; 
       }
-  
-      const resetGame = () => {
-        board.value = Array(9).fill('')
-        winningCells.value = []
-        gameOver.value = false
-        gameOverMessage.value = ''
-      }
-  
-      const resetStats = () => {
-        stats.wins = 0
-        stats.losses = 0
-        stats.draws = 0
-      }
-  
-      return {
-        board,
-        winningCells,
-        gameOver,
-        gameOverMessage,
-        isLoading,
-        stats,
-        makeMove,
-        resetGame,
-        resetStats
-      }
+
+      return null; 
+    },
+    resetGame() {
+      this.board = Array(9).fill('');
+      this.gameOver = false;
+      this.resultMessage = 'GAME ON!';
     }
   }
-  </script>
+};
+</script>
+
+
+<style scoped>
+.game-container {
+  text-align: center;
+  width: 350px;
+  /* margin: auto; */
+}
+
+.game-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.cell {
+  border: 1px solid white;
+  height: 100px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 48px;
+  cursor: pointer;
+}
+
+.game-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.game-stats span {
+  text-align: center;
+  padding-top: 10px;
+  width: 70px ;
+}
+
+.game-result {
+  margin-top: 20px;
+}
+</style>
